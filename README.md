@@ -1,146 +1,175 @@
+# ECE DevOps Lab 7 — Containers Docker pas-à-pas
 
-# Lab 7 – Containers with Docker
-
-## Objectifs
-
-1. Installer Docker  
-2. Écrire un `Dockerfile` et construire une image Docker  
-3. Exécuter un conteneur Docker avec différentes options  
-4. Partager une image Docker avec un camarade  
-5. Créer et exécuter une application multi-conteneurs avec Docker Compose  
+Ce dépôt reprend les exercices du module [Docker Containers](https://github.com/adaltas/ece-devops-2025-fall/tree/main/modules/07.docker-containers/lab). 
 
 ---
 
-## Liens utiles
+## 0. Pré-requis
 
-- [Dockerfile Best Practices](https://docs.docker.com/develop/develop-images/dockerfile_best-practices/)
-- [Documentation Docker Compose](https://docs.docker.com/compose/)
+| Outil | Version conseillée | Vérification |
+| --- | --- | --- |
+| [Docker Desktop](https://www.docker.com/get-started) (ou Docker Engine + Compose plugin) | 24.x+ | `docker --version` |
+| Docker Compose V2 (fourni avec Docker Desktop) | 2.x+ | `docker compose version` |
+| [Git](https://git-scm.com/) | 2.x+ | `git --version` |
 
----
-
-## Ressources
-
-**Dossier [`lab/hello-world-docker`](lab/hello-world-docker)**  
-- `server.js` : application web Node.js "Hello World"  
-- `package.json` : dépendances et configuration de l’app  
-- `Dockerfile` : instructions de création du conteneur  
-
-**Dossier [`lab/hello-world-docker-compose`](lab/hello-world-docker-compose)**  
-- `server.js` : application web Node.js connectée à Redis  
-- `dbClient.js` : gestion de la connexion à Redis  
-- `package.json` : dépendances et configuration de l’app  
-- `Dockerfile` : création du conteneur applicatif  
-- `docker-compose.yaml` : configuration multi-conteneurs  
-
----
-
-## 1. Installation de Docker
-
-1. Installer [Docker Desktop](https://www.docker.com/get-started) selon votre système d’exploitation.  
-2. Vérifier le bon fonctionnement de Docker :  
+1. Installer les outils ci-dessus.
+2. Redémarrer ta machine si c’est la première fois que tu actives la virtualisation/WSL2.
+3. Vérifier que Docker fonctionne :
    ```bash
    docker run hello-world
-
+   ```
+   On doit voir un message “Hello from Docker!” avant de poursuivre.
 
 ---
 
-## 2. Écriture du Dockerfile et création de l’image
+## 1. Récupérer ce dépôt
 
-1. Se placer dans le dossier `lab/hello-world-docker`.
-2. Observer les fichiers `server.js`, `package.json` et `Dockerfile`.
-3. Construire l’image Docker :
+```bash
+git clone https://github.com/<ton-compte>/ece-devops-lab7.git
+cd ece-devops-lab7
+```
 
-   ```bash
-   docker build -t hello-world-docker .
-   ```
-4. Vérifier la présence de l’image :
+Structure utile :
 
-   ```bash
-   docker images
-   ```
+```
+lab/
+├─ hello-world-docker/            
+└─ hello-world-docker-compose/    
+```
+
+Toutes les commandes suivantes partent de la racine du dépôt (`ece-devops-lab7`).
 
 ---
 
-## 3. Exécution du conteneur Docker
+## 2. Hello World avec Docker (`lab/hello-world-docker`)
 
-1. Lancer le conteneur :
+Cette appli Node écoute sur le port 8080 et crée un fichier `data/visit-<timestamp>.txt` à chaque requête.
 
+### 2.1 Construire l’image
+
+```bash
+cd lab/hello-world-docker
+docker build -t hello-world-docker .
+docker images | grep hello-world-docker
+```
+
+- `docker build -t … .` cherche le `Dockerfile` dans le dossier courant.
+- La seconde commande confirme que l’image existe bien en local.
+
+### 2.2 Lancer, tester et arrêter le conteneur
+
+```bash
+docker run -p 12345:8080 -d hello-world-docker
+docker ps
+```
+
+1. Repèrer l’`CONTAINER ID` dans `docker ps`.
+2. Ouvrir <http://localhost:12345> dans ton navigateur (ou `curl http://localhost:12345`).
+3. Afficher les logs :
    ```bash
-   docker run -p 12345:8080 -d hello-world-docker
+    docker logs <CONTAINER_ID>
    ```
-2. Vérifier son exécution :
-
-   ```bash
-   docker ps
-   ```
-3. Accéder à l’application sur [http://localhost:12345](http://localhost:12345).
-4. Consulter les logs :
-
-   ```bash
-   docker logs <CONTAINER_ID>
-   ```
-5. Arrêter le conteneur :
-
+4. Couper le conteneur :
    ```bash
    docker stop <CONTAINER_ID>
    ```
 
----
+Chaque visite crée un fichier dans `lab/hello-world-docker/data`. On peut les lister avec `ls data`.
 
-## 4. Partage de l’image Docker
+### 2.3 Personnaliser et partager l’image
 
-1. Modifier le message dans `server.js` (ex. ajouter votre nom).
-2. Recompiler l’image avec un nouveau nom.
-3. Créer un compte sur [Docker Hub](https://hub.docker.com/).
-4. Taguer l’image :
-
+1. Éditer `server.js` (changer le message envoyé).
+2. Re-builder avec un nouveau tag Docker Hub :
    ```bash
-   docker tag hello-world-docker <DOCKER_ACCOUNT>/<IMAGE_NAME>
+   docker build -t <dockerhub>/hello-world-docker:v1 .
    ```
-5. Se connecter :
-
+3. Se connecter à Docker Hub :
    ```bash
    docker login
    ```
-6. Envoyer l’image :
-
+4. Publier l’image :
    ```bash
-   docker push <DOCKER_ACCOUNT>/<IMAGE_NAME>
+   docker push <dockerhub>/hello-world-docker:v1
    ```
-7. Un camarade peut ensuite la récupérer :
-
+5. Demander à un·e camarade de tester :
    ```bash
-   docker pull <DOCKER_ACCOUNT>/<IMAGE_NAME>
-   docker run -p 12345:8080 -d <DOCKER_ACCOUNT>/<IMAGE_NAME>
+   docker pull <dockerhub>/hello-world-docker:v1
+   docker run -p 12345:8080 -d <dockerhub>/hello-world-docker:v1
    ```
 
 ---
 
-## 5. Application multi-conteneurs avec Docker Compose
+## 3. Application multi-conteneurs (`lab/hello-world-docker-compose`)
 
-1. Vérifier que Docker Compose est installé.
-2. Se placer dans `lab/hello-world-docker-compose`.
-3. Compléter le fichier `docker-compose.yaml` pour utiliser votre image et un service Redis.
-4. Lancer les conteneurs :
+Cette version compte le nombre de visites via Redis. Docker Compose orchestre deux services : `web` (Node) et `redis`. Le port externe est `5000`.
 
-   ```bash
-   docker compose up
-   ```
-5. Accéder à [http://localhost:5000](http://localhost:5000) et actualiser la page plusieurs fois.
-6. Arrêter avec `CTRL + C`, puis supprimer les conteneurs :
+### 3.1 Construire (optionnel)
 
-   ```bash
-   docker compose rm
-   ```
-7. Relancer et observer le comportement du compteur (données perdues).
-8. Modifier le `docker-compose.yaml` pour conserver les données avec un volume Docker.
+```bash
+cd ../hello-world-docker-compose
+docker compose build
+```
 
-**Indice :** Redis stocke ses données dans `/data`. Consultez [Docker Volumes](https://docs.docker.com/storage/volumes/).
+`docker compose build` lit `docker-compose.yaml`, construit l’image `web` en local puis crée l’image Redis depuis Docker Hub.
+
+### 3.2 Démarrer et interagir
+
+```bash
+docker compose up
+```
+
+- Attendre le log `Running on http://localhost:8080`.
+- Ouvrir <http://localhost:5000> et rafraîchis plusieurs fois pour voir le compteur monter.
+- Stopper les conteneurs avec `Ctrl+C`.
+
+### 3.3 Nettoyer et tester la persistance Redis
+
+```bash
+docker compose rm
+docker compose up -d
+docker compose ps
+open http://localhost:5000   # ou navigateur
+docker compose down
+```
+
+- `rm` supprime les conteneurs arrêtés.
+- Le volume `redis-data:/data` (déjà défini dans le fichier) garde le compteur même après `docker compose down`.
+- Pour repartir de zéro, supprime le volume : `docker volume rm hello-world-docker-compose_redis-data`.
 
 ---
 
-## Bonus
+## 4. Bonus : WordPress + MySQL
 
-* Déployer WordPress et MySQL à l’aide de Docker Compose.
+Le fichier officiel se trouve [ici](https://github.com/adaltas/ece-devops-2025-fall/tree/main/modules/07.docker-containers/lab/wordpress). Pour tout récupérer et lancer :
 
+```bash
+mkdir -p ../wordpress
+curl -o ../wordpress/docker-compose.yml https://raw.githubusercontent.com/adaltas/ece-devops-2025-fall/main/modules/07.docker-containers/lab/wordpress/docker-compose.yml
+cd ../wordpress
+docker compose up -d
+```
 
+- Accède à WordPress via <http://localhost:8000>.
+- Identifiants MySQL configurés dans le compose : `wordpress` / `wordpress`.
+- Pour arrêter : `docker compose down`.
+
+---
+
+## 5. Nettoyage global
+
+Quand tu as terminé le TP, libère les ressources :
+
+```bash
+docker compose down --volumes --rmi local   # à lancer dans chaque dossier compose
+docker rm -f $(docker ps -aq)               # supprime tous les conteneurs restants
+docker rmi hello-world-docker               # supprime l'image de l'étape 2
+docker image prune -f                       # supprime les images non utilisées
+docker volume prune                         # supprime les volumes orphelins
+```
+
+---
+
+## Références utiles
+
+- Docs officielles : [Dockerfile best practices](https://docs.docker.com/develop/develop-images/dockerfile_best-practices/), [Docker Compose](https://docs.docker.com/compose/).
+- Cours : <https://github.com/adaltas/ece-devops-2025-fall/tree/main/modules/07.docker-containers>.
